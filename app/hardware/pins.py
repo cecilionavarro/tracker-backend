@@ -1,0 +1,2 @@
+BUTTON_PIN = 2
+LED_PIN = 17
