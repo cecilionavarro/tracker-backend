@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,7 +11,8 @@ from app.services.state_manager import StateManager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-  app.state.state_manager = StateManager()
+  loop = asyncio.get_running_loop()
+  app.state.state_manager = StateManager(loop)
   app.state.gpio = GPIOController(app.state.state_manager)
   try:
     yield

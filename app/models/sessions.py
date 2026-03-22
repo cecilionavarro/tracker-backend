@@ -10,3 +10,4 @@ class Session(BaseModel):
   start_time: datetime
   end_time: Optional[datetime] = None
   elapsed_time: Optional[int] = None
+  notes: str
