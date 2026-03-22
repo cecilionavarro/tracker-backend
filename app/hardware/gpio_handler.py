@@ -1,3 +1,4 @@
+import asyncio
 from gpiozero import LED, Button
 
 from app.hardware.pins import BUTTON_PIN, LED_PIN
@@ -11,7 +12,12 @@ class GPIOController:
     self.button.when_pressed = self.handle_press
 
   def handle_press(self):
-    self.state_manager.toggle()
+    self.state_manager.loop.call_soon_threadsafe(
+      lambda: asyncio.create_task(self._handle_press_async())
+    )
+
+  async def _handle_press_async(self):
+    await self.state_manager.toggle()
 
     if self.state_manager.is_clocked_in():
       self.led.on()

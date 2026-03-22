@@ -8,11 +8,16 @@ from app.core.config import settings
 from app.api.v1.router import api_router
 from app.hardware.gpio_handler import GPIOController
 from app.services.state_manager import StateManager
+from app.core.database import users_collection
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
   loop = asyncio.get_running_loop()
-  app.state.state_manager = StateManager(loop)
+
+  default_user = await users_collection.find_one({"email": "test@test.com"})
+  app.state.user_id = default_user["_id"]
+
+  app.state.state_manager = StateManager(loop, app.state.user_id)
   app.state.gpio = GPIOController(app.state.state_manager)
   try:
     yield

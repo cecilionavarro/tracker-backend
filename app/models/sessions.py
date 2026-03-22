@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
 
-class Session(BaseModel):
+class SessionModel(BaseModel):
   # view in detail later id
   id: Optional[str] = Field(alias="_id", default=None)
   user_id: str

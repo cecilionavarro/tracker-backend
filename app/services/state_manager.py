@@ -1,12 +1,14 @@
 import asyncio
 from datetime import datetime, timezone
 from app.manager import manager
+from app.services.session_service import session_service
 
 class StateManager:
-  def __init__(self, loop):
+  def __init__(self, loop, user_id):
     self.loop = loop
     self.clocked_in = False
     self.started_at = None
+    self.user_id = str(user_id)
   
   def is_clocked_in(self) -> bool:
     return self.clocked_in
@@ -17,23 +19,28 @@ class StateManager:
       "started_at" : self.started_at.isoformat() if self.started_at else None
     }
   
-  def clock_in(self) -> None:
+  async def clock_in(self) -> None:
+    now = datetime.now(timezone.utc)
+    await session_service.open_session(self.user_id)
+    
     self.clocked_in = True
-    self.started_at = datetime.now(timezone.utc)
+    self.started_at = now
 
-  def clock_out(self) -> None:
+  async def clock_out(self) -> None:
+    await session_service.close_session(self.user_id)
+
     self.clocked_in = False
     self.started_at = None
 
-  def toggle(self) -> None:
+  async def toggle(self) -> None:
     if self.clocked_in:
-      self.clock_out()
+      await self.clock_out()
     else:
-      self.clock_in()
+      await self.clock_in()
     
     self._broadcast_state()
-    # print(self.clocked_in)
-    # print(self.started_at)
+    print(self.clocked_in)
+    print(self.started_at)
 
   def _broadcast_state(self) -> None:
     payload = {
