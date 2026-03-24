@@ -19,7 +19,7 @@ async def main():
         await users_collection.update_one(
             {"email": "test@test.com"},
             {
-                "$set": updated_user.model_dump()
+                "$set": updated_user.model_dump(exclude={"id"})
             },
         )
         print("User updated")

@@ -4,3 +4,4 @@ pymongo
 gpiozero
 lgpio
 pydantic-settings
+pydantic[email]

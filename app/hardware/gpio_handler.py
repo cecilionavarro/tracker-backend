@@ -11,18 +11,24 @@ class GPIOController:
     self.led = LED(LED_PIN)
     self.button.when_pressed = self.handle_press
 
+    # will turn on or off from db info on init
+    self._toggle_led()
+
   def handle_press(self):
     self.state_manager.loop.call_soon_threadsafe(
       lambda: asyncio.create_task(self._handle_press_async())
     )
 
-  async def _handle_press_async(self):
-    await self.state_manager.toggle()
-
+  def _toggle_led(self):
     if self.state_manager.is_clocked_in():
       self.led.on()
     else:
       self.led.off()
+
+  async def _handle_press_async(self):
+    await self.state_manager.toggle()
+
+    self._toggle_led()
 
   def stop(self):
     print("stopping GPIO")

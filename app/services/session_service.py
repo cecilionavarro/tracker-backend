@@ -1,3 +1,4 @@
+from bson import ObjectId
 from app.models.events import EventModel
 from app.models.sessions import SessionModel
 from datetime import datetime, timezone
@@ -8,24 +9,37 @@ class SessionService():
   def __init__(self):
     pass
 
+  async def get_active_session(self, user_id: str):
+    return await sessions_collection.find_one({
+      "user_id": ObjectId(user_id),
+      "status": "active",
+      "end_time": None,
+    })
+
   async def open_session(self, user_id: str) -> str:
     now = datetime.now(timezone.utc)
 
     session = SessionModel(
       user_id = user_id,
+      category_id = "69c2af380b699d12ba42404b",
       status = "active",
       start_time=now,
       end_time = None,
       notes = "",
+      created_at=now,
+      updated_at=now
     )
+
+    session.user_id = ObjectId(session.user_id)
+    session.category_id = ObjectId(session.category_id)
 
     returned_session = await sessions_collection.insert_one(session.model_dump(exclude={"id"}))
 
     event = EventModel(
       session_id = str(returned_session.inserted_id),
       event_type = "clocked_in",
-      source = "button_press",
-      timestamp = now,
+      source = "raspberry_pi",
+      created_at = now,
     )
 
     await events_collection.insert_one(event.model_dump(exclude={"id"}))
@@ -36,19 +50,27 @@ class SessionService():
     now = datetime.now(timezone.utc)
 
     active_session = await sessions_collection.find_one({
-      "user_id": user_id,
+      "user_id": ObjectId(user_id),
       "status": "active",
       "end_time": None,
     })
 
-    if active_session:
-      updated_session = {
-        "status" : "completed",
-        "end_time" : now,
-      }
-    else:
+
+    if not active_session:
       return
 
+    elapsed_time = int((now - active_session["start_time"]).total_seconds())
+    
+    updated_session = {
+      "status" : "completed",
+      "end_time" : now,
+      "elapsed_time" : elapsed_time,
+      "updated_at": now,
+    }
+
+
+    # update_one(filter, update)
+    # $set means update these value fields
     await sessions_collection.update_one(
         {"_id": active_session["_id"]},
         {
@@ -59,8 +81,8 @@ class SessionService():
     event = EventModel(
       session_id = str(active_session["_id"]),
       event_type = "clocked_out",
-      source = "button_press",
-      timestamp = now,
+      source = "raspberry_pi",
+      created_at = now,
     )
 
     await events_collection.insert_one(event.model_dump(exclude={"id"}))

@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 from app.manager import manager
+from app.models.sessions import SessionModel
 from app.services.session_service import session_service
 
 class StateManager:
@@ -18,6 +19,21 @@ class StateManager:
       "clocked_in" : self.clocked_in,
       "started_at" : self.started_at.isoformat() if self.started_at else None
     }
+  
+  async def restore_active_session(self) -> None:
+    active_session = await session_service.get_active_session(self.user_id)
+    if not active_session:
+      self.clocked_in = False
+      self.started_at = None
+      return
+    
+    start_time = active_session["start_time"]
+    if start_time.tzinfo is None:
+      start_time = start_time.replace(tzinfo=timezone.utc)
+
+    self.clocked_in = True
+    self.started_at = start_time
+
   
   async def clock_in(self) -> None:
     now = datetime.now(timezone.utc)
@@ -39,8 +55,12 @@ class StateManager:
       await self.clock_in()
     
     self._broadcast_state()
-    print(self.clocked_in)
-    print(self.started_at)
+
+    # print the status
+    if self.clocked_in:
+      print("Clocked in")
+    else:
+      print("Clocked out")
 
   def _broadcast_state(self) -> None:
     payload = {

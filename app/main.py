@@ -18,6 +18,8 @@ async def lifespan(app: FastAPI):
   app.state.user_id = default_user["_id"]
 
   app.state.state_manager = StateManager(loop, app.state.user_id)
+  await app.state.state_manager.restore_active_session()
+
   app.state.gpio = GPIOController(app.state.state_manager)
   try:
     yield
