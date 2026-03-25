@@ -1,7 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
 from app.manager import manager
-from app.models.sessions import SessionModel
 from app.services.session_service import session_service
 
 class StateManager:

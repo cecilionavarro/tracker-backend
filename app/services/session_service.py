@@ -4,6 +4,7 @@ from app.models.sessions import SessionModel
 from datetime import datetime, timezone
 from app.core.database import sessions_collection
 from app.core.database import events_collection
+from app.schemas.session_schema import list_session_serial
 
 class SessionService():
   def __init__(self):
@@ -21,7 +22,7 @@ class SessionService():
 
     session = SessionModel(
       user_id = user_id,
-      category_id = "69c2af380b699d12ba42404b",
+      category_id = "69c2eb61c3192568a8a3b370",
       status = "active",
       start_time=now,
       end_time = None,
@@ -52,11 +53,7 @@ class SessionService():
   async def close_session(self, user_id):
     now = datetime.now(timezone.utc)
 
-    active_session = await sessions_collection.find_one({
-      "user_id": ObjectId(user_id),
-      "status": "active",
-      "end_time": None,
-    })
+    active_session = await self.get_active_session(user_id)
 
     # if can't find it in db
     if not active_session:
@@ -70,7 +67,6 @@ class SessionService():
       "elapsed_time" : elapsed_time,
       "updated_at": now,
     }
-
 
     # update_one(filter, update)
     # $set means update these value fields
@@ -89,5 +85,35 @@ class SessionService():
     )
 
     await events_collection.insert_one(event.model_dump(exclude={"id"}))
+
+  async def list_sessions(self, user_id: str, page: int = 1, page_size: int = 10):
+    skip = (page - 1) * page_size
+    query = {"user_id": ObjectId(user_id)}                    # filter
+
+    total = await sessions_collection.count_documents(query)  # how many documents fit this filter
+
+    # building the cursor, how to get the data like where to start how many to skip, what num of documents to return.
+    # equivalent to `sessions = await sessions_collection.find(query).sort("start_time", -1).skip(skip).limit(page_size).to_list(length=page_size)`
+    cursor = (
+      sessions_collection
+      .find(query)
+      .sort("start_time", -1)
+      .skip(skip)
+      .limit(page_size)
+    )
+
+    sessions = await cursor.to_list(length=page_size)         # to list converts to list :)
+    items = list_session_serial(sessions)
+
+    total_pages = (total + page_size -1) // page_size
+
+    return {
+      "items": items,
+      "total": total,
+      "page": page,
+      "page_size": page_size,
+      "total_pages": total_pages,
+    }
+
 
 session_service = SessionService()
