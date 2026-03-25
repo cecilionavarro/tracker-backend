@@ -30,10 +30,13 @@ class SessionService():
       updated_at=now
     )
 
-    session.user_id = ObjectId(session.user_id)
-    session.category_id = ObjectId(session.category_id)
+    payload = session.model_dump(exclude={"id"})
+    payload["user_id"] = ObjectId(payload["user_id"])
+    payload["category_id"] = ObjectId(payload["category_id"])
+    # session.user_id = ObjectId(session.user_id)
+    # session.category_id = ObjectId(session.category_id)
 
-    returned_session = await sessions_collection.insert_one(session.model_dump(exclude={"id"}))
+    returned_session = await sessions_collection.insert_one(payload)
 
     event = EventModel(
       session_id = str(returned_session.inserted_id),
@@ -55,7 +58,7 @@ class SessionService():
       "end_time": None,
     })
 
-
+    # if can't find it in db
     if not active_session:
       return
 

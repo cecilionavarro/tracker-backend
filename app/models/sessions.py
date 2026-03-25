@@ -11,6 +11,7 @@ class SessionModel(BaseModel):
   start_time: datetime
   end_time: Optional[datetime] = None
   elapsed_time: Optional[int] = None
+  tags: str = ""
   notes: str = ""
   created_at: datetime
   updated_at: datetime

@@ -8,14 +8,15 @@ from app.models.category_group import CategoryGroupModel
 
 async def main():
     now = datetime.now(timezone.utc)
+    key = "personal"
 
-    existing_group = await category_groups_collection.find_one({"key": "work"})
+    existing_group = await category_groups_collection.find_one({"key": key})
 
     if not existing_group:
         group = CategoryGroupModel(
-            key="work",
-            label="Work",
-            color="orange",
+            key=key,
+            label="Personal",
+            color="yellow",
             active=True,
             created_at=now,
             updated_at=now,
@@ -24,9 +25,9 @@ async def main():
         await category_groups_collection.insert_one(
             group.model_dump(exclude={"id"})
         )
-        print("Category group created")
+        print(f"Category group {key} created")
     else:
-        print("Category group already exists")
+        print(f"Category group {key} already exists")
 
 
 if __name__ == "__main__":

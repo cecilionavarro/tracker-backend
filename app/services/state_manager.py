@@ -10,7 +10,7 @@ class StateManager:
     self.clocked_in = False
     self.started_at = None
     self.user_id = str(user_id)
-  
+    
   def is_clocked_in(self) -> bool:
     return self.clocked_in
   
@@ -22,11 +22,14 @@ class StateManager:
   
   async def restore_active_session(self) -> None:
     active_session = await session_service.get_active_session(self.user_id)
+    
     if not active_session:
       self.clocked_in = False
       self.started_at = None
+      print("Clocked out (db)")
       return
     
+    print("Clocked in (db)")
     start_time = active_session["start_time"]
     if start_time.tzinfo is None:
       start_time = start_time.replace(tzinfo=timezone.utc)
@@ -49,7 +52,7 @@ class StateManager:
     self.started_at = None
 
   async def toggle(self) -> None:
-    if self.clocked_in:
+    if self.is_clocked_in():
       await self.clock_out()
     else:
       await self.clock_in()
@@ -57,7 +60,7 @@ class StateManager:
     self._broadcast_state()
 
     # print the status
-    if self.clocked_in:
+    if self.is_clocked_in():
       print("Clocked in")
     else:
       print("Clocked out")
