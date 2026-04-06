@@ -6,7 +6,6 @@ from app.models.session_response import SessionListResponse
 
 router = APIRouter()
 
-
 @router.get("/sessions", response_model=SessionListResponse)
 async def get_sessions(
     request: Request,

@@ -9,15 +9,15 @@ from app.models.category import CategoryModel
 async def main():
     now = datetime.now(timezone.utc)
 
-    key = "creating"
+    key = "toycon"
 
     existing_category = await categories_collection.find_one({"key": key})
 
     if not existing_category:
         category = CategoryModel(
-            group_id="69c2e9c3b04dd136c7c50a83",
+            group_id="69c2af380b699d12ba42404b",
             key=key,
-            label="Creating",
+            label="Toycon",
             active=True,
             created_at=now,
             updated_at=now,

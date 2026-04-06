@@ -9,10 +9,13 @@ from app.api.v1.router import api_router
 from app.hardware.gpio_handler import GPIOController
 from app.services.state_manager import StateManager
 from app.core.database import users_collection
+from app.core.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
   loop = asyncio.get_running_loop()
+
+  print(f"{settings.SESSION_CATEGORY}")
 
   default_user = await users_collection.find_one({"email": "test@test.com"})
   app.state.user_id = default_user["_id"]

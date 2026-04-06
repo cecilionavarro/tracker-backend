@@ -5,6 +5,7 @@ class Settings(BaseSettings):
   debug: bool = True
   MONGO_URI: str
   DB_NAME: str
+  SESSION_CATEGORY: str
 
   # this too
   # class Config:

@@ -4,11 +4,23 @@ from app.models.sessions import SessionModel
 from datetime import datetime, timezone
 from app.core.database import sessions_collection
 from app.core.database import events_collection
+from app.core.config import settings
 from app.schemas.session_schema import list_session_serial
+
+CATEGORY_ALIASES = {
+  "GYRUS": "69cb0874185e44b0a39bb520",
+  "TOYCON": "69cb0b2c1c51a675c0caee58",
+  "CREATING": "69c2eb61c3192568a8a3b370",
+}
 
 class SessionService():
   def __init__(self):
     pass
+
+  def _get_session_category_id(self) -> str:
+    configured_category = settings.SESSION_CATEGORY.strip()
+    print(configured_category)
+    return CATEGORY_ALIASES.get(configured_category.upper(), configured_category)
 
   async def get_active_session(self, user_id: str):
     return await sessions_collection.find_one({
@@ -22,7 +34,7 @@ class SessionService():
 
     session = SessionModel(
       user_id = user_id,
-      category_id = "69c2eb61c3192568a8a3b370",
+      category_id = self._get_session_category_id(),
       status = "active",
       start_time=now,
       end_time = None,
