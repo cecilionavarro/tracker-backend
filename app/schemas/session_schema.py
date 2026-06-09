@@ -16,6 +16,7 @@ def individual_session_serial(session: dict) -> dict:
     return {
         "id": str(session["_id"]),
         "category_id": str(session["category_id"]),
+        "category": session.get("category"),
         "status": session["status"],
         "is_active": is_active,
         "start_time": start_time,

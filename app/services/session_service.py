@@ -4,6 +4,7 @@ from app.models.sessions import SessionModel
 from datetime import datetime, timezone
 from app.core.database import sessions_collection
 from app.core.database import events_collection
+from app.core.database import categories_collection
 from app.core.config import settings
 from app.schemas.session_schema import list_session_serial
 
@@ -11,6 +12,7 @@ CATEGORY_ALIASES = {
   "GYRUS": "69cb0874185e44b0a39bb520",
   "TOYCON": "69cb0b2c1c51a675c0caee58",
   "CREATING": "69c2eb61c3192568a8a3b370",
+  "PIANISO": "6a02b0c85f921debb9421cee",
 }
 
 class SessionService():
@@ -19,7 +21,6 @@ class SessionService():
 
   def _get_session_category_id(self) -> str:
     configured_category = settings.SESSION_CATEGORY.strip()
-    print(configured_category)
     return CATEGORY_ALIASES.get(configured_category.upper(), configured_category)
 
   async def get_active_session(self, user_id: str):
@@ -115,6 +116,29 @@ class SessionService():
     )
 
     sessions = await cursor.to_list(length=page_size)         # to list converts to list :)
+
+    # new
+    category_ids = list({session["category_id"] for session in sessions if session.get("category_id")})
+    category_map = {}
+    if category_ids:
+      categories = await categories_collection.find({"_id": {"$in": category_ids}}).to_list(length=len(category_ids))
+
+      print(categories)
+
+      category_map = {
+        str(category["_id"]): {
+          "id": str(category["_id"]),
+          "label": category["label"],
+          "color": category.get("color"),
+        }
+        for category in categories
+      }
+      for session in sessions:
+        category_id = session.get("category_id")
+        session["category"] = category_map.get(str(category_id)) if category_id else None
+
+    # end new
+
     items = list_session_serial(sessions)
 
     total_pages = (total + page_size -1) // page_size

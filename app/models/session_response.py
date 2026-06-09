@@ -3,10 +3,15 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+class CategorySummary(BaseModel):
+    id: str
+    label: str
+    color: Optional[str] = None
 
 class SessionListItemResponse(BaseModel):
     id: str
     category_id: str
+    category: CategorySummary
     status: str
     is_active: bool
     start_time: datetime

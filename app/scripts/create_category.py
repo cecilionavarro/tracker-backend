@@ -9,7 +9,7 @@ from app.models.category import CategoryModel
 async def main():
     now = datetime.now(timezone.utc)
 
-    key = "toycon"
+    key = "pianiso"
 
     existing_category = await categories_collection.find_one({"key": key})
 
@@ -17,7 +17,7 @@ async def main():
         category = CategoryModel(
             group_id="69c2af380b699d12ba42404b",
             key=key,
-            label="Toycon",
+            label="Pianiso",
             active=True,
             created_at=now,
             updated_at=now,
