@@ -23,6 +23,13 @@ class SessionService():
     configured_category = settings.SESSION_CATEGORY.strip()
     return CATEGORY_ALIASES.get(configured_category.upper(), configured_category)
 
+  def resolve_category_id(self, category: str | None = None) -> str:
+    if category is None:
+      return self._get_session_category_id()
+
+    configured_category = category.strip()
+    return CATEGORY_ALIASES.get(configured_category.upper(), configured_category)
+
   async def get_active_session(self, user_id: str):
     return await sessions_collection.find_one({
       "user_id": ObjectId(user_id),
@@ -30,15 +37,16 @@ class SessionService():
       "end_time": None,
     })
 
-  async def open_session(self, user_id: str) -> str:
+  async def open_session(self, user_id: str, category: str | None = None, tags: str = "") -> str:
     now = datetime.now(timezone.utc)
 
     session = SessionModel(
       user_id = user_id,
-      category_id = self._get_session_category_id(),
+      category_id = self.resolve_category_id(category),
       status = "active",
       start_time=now,
       end_time = None,
+      tags = tags,
       notes = "",
       created_at=now,
       updated_at=now
@@ -98,6 +106,70 @@ class SessionService():
     )
 
     await events_collection.insert_one(event.model_dump(exclude={"id"}))
+
+  async def close_session_by_id(self, user_id: str, session_id: str) -> dict | None:
+    now = datetime.now(timezone.utc)
+
+    session = await sessions_collection.find_one({
+      "_id": ObjectId(session_id),
+      "user_id": ObjectId(user_id),
+    })
+
+    if not session:
+      return None
+
+    if session.get("status") == "active" and session.get("end_time") is None:
+      elapsed_time = int((now - session["start_time"]).total_seconds())
+      updated_session = {
+        "status": "completed",
+        "end_time": now,
+        "elapsed_time": elapsed_time,
+        "updated_at": now,
+      }
+
+      await sessions_collection.update_one(
+        {"_id": session["_id"]},
+        {"$set": updated_session},
+      )
+
+      event = EventModel(
+        session_id=str(session["_id"]),
+        event_type="clocked_out",
+        source="api",
+        created_at=now,
+      )
+      await events_collection.insert_one(event.model_dump(exclude={"id"}))
+
+      session.update(updated_session)
+
+    return session
+
+  async def delete_session(self, user_id: str, session_id: str) -> dict | None:
+    session = await sessions_collection.find_one({
+      "_id": ObjectId(session_id),
+      "user_id": ObjectId(user_id),
+    })
+
+    if not session:
+      return None
+
+    was_active = session.get("status") == "active" and session.get("end_time") is None
+
+    session = await self.close_session_by_id(user_id, session_id)
+
+    if not session:
+      return None
+
+    await sessions_collection.delete_one({
+      "_id": session["_id"],
+      "user_id": ObjectId(user_id),
+    })
+    await events_collection.delete_many({"session_id": str(session["_id"])})
+
+    return {
+      "id": str(session["_id"]),
+      "was_active": was_active,
+    }
 
   async def list_sessions(self, user_id: str, page: int = 1, page_size: int = 10):
     skip = (page - 1) * page_size
