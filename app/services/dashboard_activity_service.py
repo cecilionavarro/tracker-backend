@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from bson import ObjectId
 
-from app.core.database import sessions_collection
+from app.core.database import sessions_collection, categories_collection
 from app.services.session_service import CATEGORY_ALIASES
 
 
@@ -98,10 +98,15 @@ class DashboardActivityService:
             ],
         }).to_list(length=None)
 
+        category_ids = list({session.get("category_id") for session in sessions if session.get("category_id")})
+        categories = await categories_collection.find({"_id": {"$in": category_ids}}).to_list(length=None)
+        category_map = {str(category["_id"]): category for category in categories}
+
         activity_by_date = {
             (start_day_local + timedelta(days=offset)).date(): {
                 "time_worked": 0,
                 "session_ids": set(),
+                "categories": {},
                 **{section_key: 0 for section_key in SECTION_KEYS},
             }
             for offset in range(days)
@@ -117,6 +122,21 @@ class DashboardActivityService:
                 if start_day_local.date() <= segment_date <= end_day_local.date():
                     activity_by_date[segment_date]["time_worked"] += segment["seconds"]
                     activity_by_date[segment_date]["session_ids"].add(session_id)
+                    category_id = str(session.get("category_id") or "uncategorized")
+                    category = category_map.get(category_id, {})
+                    tags = self._normalize_tag(session.get("tags")).replace("-", "_").replace(" ", "_")
+                    component_id = f"{category_id}:{tags}"
+                    breakdown = activity_by_date[segment_date]["categories"].setdefault(component_id, {
+                        "id": component_id,
+                        "tags": tags,
+                        "is_active": False,
+                        "label": category.get("label") or f"Missing category ({category_id})",
+                        "color": category.get("color"),
+                        "seconds": 0,
+                    })
+                    breakdown["seconds"] += segment["seconds"]
+                    if session.get("end_time") is None and segment_date == now_local.date():
+                        breakdown["is_active"] = True
                     if section_key:
                         activity_by_date[segment_date][section_key] += segment["seconds"]
 
@@ -131,6 +151,7 @@ class DashboardActivityService:
                 "date": current_date.isoformat(),
                 "time_worked": activity["time_worked"],
                 "session_count": len(activity["session_ids"]),
+                "categories": sorted(activity["categories"].values(), key=lambda category: category["label"]),
                 **{
                     section_key: activity[section_key]
                     for section_key in SECTION_KEYS
