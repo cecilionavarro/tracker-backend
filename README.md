@@ -82,3 +82,18 @@ curl http://127.0.0.1:4004/api/v1/health
 Expected response: `{"status":"healthy"}`. API docs are at `http://<PI_LAN_IP>:4004/docs`.
 From the frontend machine, also check `http://localhost:5173/api/v1/health` to verify
 the proxy. The live dashboard WebSocket endpoint is `/api/v1/ws/dashboard/`.
+
+WebSocket clients receive `status_update` on connection and `state_update` after
+activity button presses. Sending `{"type":"ping"}` receives `{"type":"pong"}`
+only on that connection. Failed or slow clients are removed without preventing
+healthy clients from receiving updates. Restart the backend after changing the
+WebSocket handler; refreshing the frontend alone does not load Python changes.
+
+Run one Uvicorn worker: GPIO state and the WebSocket connection list live in that
+process. Multiple workers would need shared messaging to broadcast to every client.
+
+Run the backend connection checks without accessing GPIO or MongoDB:
+
+```bash
+python -m unittest discover -s tests -p 'test_dashboard_websocket.py' -v
+```

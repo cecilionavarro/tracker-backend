@@ -8,18 +8,22 @@ router = APIRouter()
 async def dashboard_websocket(websocket: WebSocket):
   await manager.connect(websocket)
 
-  state_manager = websocket.app.state.state_manager
-  
-  await websocket.send_json({
-    "type" : "status_update",
-    "data": state_manager.get_state()
-  })
-
   try:
+    state_manager = websocket.app.state.state_manager
+    await websocket.send_json({
+      "type": "status_update",
+      "data": state_manager.get_state()
+    })
+
     while True:
-      data = await websocket.receive_json()
-      print(data)
-      await manager.broadcast(f"Client says: {data}")
-  except WebSocketDisconnect:
+      try:
+        data = await websocket.receive_json()
+      except ValueError:
+        continue
+      if isinstance(data, dict) and data.get("type") == "ping":
+        # Reply only to the caller; heartbeats are not dashboard state changes.
+        await websocket.send_json({"type": "pong"})
+  except (WebSocketDisconnect, OSError):
+    pass
+  finally:
     manager.disconnect(websocket)
-    await manager.broadcast(f"client has disconnected")

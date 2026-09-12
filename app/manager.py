@@ -1,5 +1,9 @@
+import asyncio
+import logging
 from typing import List
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
+
+logger = logging.getLogger(__name__)
 
 class ConnectionManager:
   def __init__(self):
@@ -14,7 +18,19 @@ class ConnectionManager:
       self.active_connections.remove(websocket)
   
   async def broadcast(self, payload: dict):
-    for connection in self.active_connections:
-      await connection.send_json(payload)
+    async def send(connection):
+      try:
+        await asyncio.wait_for(connection.send_json(payload), timeout=5)
+      except (WebSocketDisconnect, OSError, RuntimeError, TimeoutError):
+        self.disconnect(connection)
+        logger.info("Removed disconnected or unresponsive dashboard client")
+        try:
+          await asyncio.wait_for(connection.close(), timeout=1)
+        except (WebSocketDisconnect, OSError, RuntimeError, TimeoutError):
+          pass
+
+    # Snapshot because disconnect handlers may modify the live list during sends.
+    # A slow/closed client must not hold up updates to other browsers.
+    await asyncio.gather(*(send(connection) for connection in tuple(self.active_connections)))
 
 manager = ConnectionManager()

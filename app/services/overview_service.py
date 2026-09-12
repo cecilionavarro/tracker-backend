@@ -119,19 +119,18 @@ class OverviewService:
         goal_completed_days = 0
         week_total_seconds = 0
 
+        # Split each session once, instead of repeating it for every weekday.
+        segments_by_date = {}
+        for session in week_sessions:
+            for segment in self._split_session_by_local_day(session, now):
+                segments_by_date.setdefault(segment["date"], []).append(segment)
+
         for offset in range(7):
             current_day_local = start_of_week_local + timedelta(days=offset)
             current_date = current_day_local.date()
             is_future = current_date > now_local.date()
 
-            segments_for_day = []
-
-            if not is_future:
-                for session in week_sessions:
-                    session_segments = self._split_session_by_local_day(session, now)
-                    for segment in session_segments:
-                        if segment["date"] == current_date:
-                            segments_for_day.append(segment)
+            segments_for_day = [] if is_future else segments_by_date.get(current_date, [])
 
             seconds = sum(segment["seconds"] for segment in segments_for_day)
 
