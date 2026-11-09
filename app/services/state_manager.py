@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 from app.manager import manager
+from app.services.pullup_service import pullup_service
 from app.services.session_service import session_service
 
 class StateManager:
@@ -101,11 +102,77 @@ class StateManager:
 
     self._broadcast_state()
 
+  async def clock_into(self, category: str, tags: str = "") -> None:
+    # From the dashboard: switches to this category and tag. Unlike a button
+    # press, picking the one already running leaves it running.
+    if self.is_active_session(category, tags):
+      return
+    if self.is_clocked_in():
+      await self.clock_out()
+    await self.clock_in(category=category, tags=tags)
+    print(f"Clocked into {category} ({self.active_tags or 'default'}) from the dashboard")
+    self._broadcast_state()
+
+  async def clock_out_if_running(self) -> bool:
+    # From the dashboard. False when there was nothing to clock out of.
+    if not self.is_clocked_in():
+      return False
+    await self.clock_out()
+    print("Clocked out from the dashboard")
+    self._broadcast_state()
+    return True
+
+  async def record_pullup(self, source: str = "raspberry_pi") -> int:
+    today = await pullup_service.add_pullup(self.user_id, source)
+    print(f"Pull-up recorded ({today} today)")
+    self._broadcast_state()
+    return today
+
+  async def remove_pullup(self) -> int | None:
+    today = await pullup_service.remove_last_pullup(self.user_id)
+    if today is not None:
+      self._broadcast_state()
+    return today
+
+  async def record_distraction(self, source: str = "raspberry_pi") -> dict | None:
+    result = await session_service.change_distractions(self.user_id, 1, source)
+    if result is None:
+      print("Distraction not counted: clock in to a session first")
+      return None
+
+    print(f"Distraction recorded ({result['distractions']} this session)")
+    self._broadcast_state()
+    return result
+
+  async def remove_distraction(self, source: str = "api") -> dict | None:
+    result = await session_service.change_distractions(self.user_id, -1, source)
+    if result is not None:
+      self._broadcast_state()
+    return result
+
   async def clear_active_session(self) -> None:
     self.clocked_in = False
     self.started_at = None
     self._set_active_session_metadata(None, "")
     self._broadcast_state()
+
+  async def sync_active_session(self) -> None:
+    # Dashboard edits can move the running session's start, change its
+    # category, or stop it, so reload what a button press compares against.
+    await self.restore_active_session()
+    self._broadcast_state()
+
+  def notify_dashboards(self) -> None:
+    # For changes that aren't button presses, such as category or note edits,
+    # so every open dashboard refreshes.
+    self._broadcast_state()
+
+  def announce_press(self, pin: int) -> None:
+    # Any button press, whatever it does, so Settings can show which button is which.
+    payload = {"type": "button_press", "data": {"pin": pin}}
+    self.loop.call_soon_threadsafe(
+      lambda: asyncio.create_task(manager.broadcast(payload))
+    )
 
   def _broadcast_state(self) -> None:
     payload = {

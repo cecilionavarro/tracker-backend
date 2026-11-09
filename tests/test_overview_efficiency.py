@@ -14,6 +14,9 @@ class OverviewEfficiencyTests(unittest.IsolatedAsyncioTestCase):
         collection = MagicMock()
         database = ModuleType("app.core.database")
         database.sessions_collection = collection
+        database.categories_collection = MagicMock()
+        database.pullups_collection = MagicMock()
+        database.pullups_collection.find.return_value.to_list = AsyncMock(return_value=[])
         spec = importlib.util.spec_from_file_location(
             "overview_under_test",
             Path(__file__).resolve().parents[1] / "app/services/overview_service.py",
@@ -42,6 +45,7 @@ class OverviewEfficiencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["day"]["longest_session_seconds"], 2 * 3600)
         self.assertEqual(result["week"]["total_time_seconds"], 11 * 3600)
         self.assertEqual(result["week"]["session_count"], 2)
-        self.assertEqual(result["week"]["goal_completed_days"], 1)
+        # Both days meet the two-hour daily goal.
+        self.assertEqual(result["week"]["goal_completed_days"], 2)
         self.assertEqual([day["seconds"] for day in result["week"]["graph"]],
                          [0, 0, 0, 8 * 3600, 3 * 3600, 0, 0])

@@ -24,6 +24,10 @@ def individual_session_serial(session: dict) -> dict:
         "elapsed_time": elapsed_time,
         "tags": session.get("tags", ""),
         "notes": session.get("notes", ""),
+        # Sessions saved before the distraction button existed have no count.
+        "distractions": session.get("distractions", 0),
+        "note_count": session.get("note_count", 0),
+        "latest_note": session.get("latest_note", ""),
     }
 
 def list_session_serial(sessions) -> list:

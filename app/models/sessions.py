@@ -13,5 +13,7 @@ class SessionModel(BaseModel):
   elapsed_time: Optional[int] = None
   tags: str = ""
   notes: str = ""
+  # Distraction button presses during this session.
+  distractions: int = 0
   created_at: datetime
   updated_at: datetime

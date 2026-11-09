@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.router import api_router
 from app.hardware.gpio_handler import GPIOController
+from app.services.button_service import button_service
 from app.services.state_manager import StateManager
 from app.core.database import users_collection
 from app.core.config import settings
@@ -23,6 +24,8 @@ async def lifespan(app: FastAPI):
   app.state.state_manager = StateManager(loop, app.state.user_id)
   await app.state.state_manager.restore_active_session()
 
+  # Button assignments come from MongoDB, seeded from pins.py the first time.
+  await button_service.load()
   app.state.gpio = GPIOController(app.state.state_manager)
   try:
     yield

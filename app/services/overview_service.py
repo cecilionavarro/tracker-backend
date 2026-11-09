@@ -3,11 +3,12 @@ from zoneinfo import ZoneInfo
 
 from bson import ObjectId
 
-from app.core.database import sessions_collection
+from app.core.database import categories_collection, pullups_collection, sessions_collection
+from app.schemas.category_schema import category_summary_serial
 
 
 OVERVIEW_TIMEZONE = ZoneInfo("America/Los_Angeles")
-DAILY_GOAL_SECONDS = 8 * 60 * 60
+DAILY_GOAL_SECONDS = 2 * 60 * 60
 
 
 class OverviewService:
@@ -23,6 +24,11 @@ class OverviewService:
 
     def _get_session_end(self, session: dict, now: datetime) -> datetime:
         return session.get("end_time") or now
+
+    def _get_activity_key(self, session: dict) -> tuple[str, str]:
+        # Same category/tag grouping as the dashboard activity chart.
+        tags = (session.get("tags") or "").strip().lower().replace("-", "_").replace(" ", "_")
+        return str(session.get("category_id") or ""), tags
 
     def _get_full_session_duration_seconds(self, session: dict, now: datetime) -> int:
         end_time = self._get_session_end(session, now)
@@ -114,6 +120,41 @@ class OverviewService:
 
         active_session = await self._get_active_session(user_id)
 
+        week_pullups = await pullups_collection.find(
+            {
+                "user_id": ObjectId(user_id),
+                "created_at": {
+                    "$gte": start_of_week_utc,
+                    "$lt": end_of_week_utc,
+                },
+            },
+            {"created_at": 1},
+        ).to_list(length=None)
+
+        pullups_by_date = {}
+        for pullup in week_pullups:
+            pullup_date = pullup["created_at"].astimezone(OVERVIEW_TIMEZONE).date()
+            pullups_by_date[pullup_date] = pullups_by_date.get(pullup_date, 0) + 1
+
+        # A session's distractions count on the day it started, the same day
+        # its session_count does.
+        distractions_by_date = {}
+        for session in week_sessions:
+            start_date = session["start_time"].astimezone(OVERVIEW_TIMEZONE).date()
+            distractions_by_date[start_date] = (
+                distractions_by_date.get(start_date, 0) + session.get("distractions", 0)
+            )
+
+        category_ids = list({session["category_id"] for session in week_sessions if session.get("category_id")})
+        categories = (
+            await categories_collection.find({"_id": {"$in": category_ids}}).to_list(length=None)
+            if category_ids else []
+        )
+        category_map = {str(category["_id"]): category for category in categories}
+        active_category = (
+            category_map.get(str(active_session.get("category_id"))) if active_session else None
+        )
+
         day_segments = []
         week_graph = []
         goal_completed_days = 0
@@ -121,9 +162,25 @@ class OverviewService:
 
         # Split each session once, instead of repeating it for every weekday.
         segments_by_date = {}
+        categories_by_date = {}
         for session in week_sessions:
+            category_id, tags = self._get_activity_key(session)
+            category = category_map.get(category_id, {})
+            is_running = session.get("end_time") is None
             for segment in self._split_session_by_local_day(session, now):
                 segments_by_date.setdefault(segment["date"], []).append(segment)
+                breakdown = categories_by_date.setdefault(segment["date"], {}).setdefault((category_id, tags), {
+                    "id": f"{category_id}:{tags}",
+                    "label": category.get("label") or f"Missing category ({category_id})",
+                    "color": category.get("color"),
+                    "tag_colors": category.get("tag_colors") or {},
+                    "tags": tags,
+                    "seconds": 0,
+                    "is_active": False,
+                })
+                breakdown["seconds"] += segment["seconds"]
+                if is_running and segment["date"] == now_local.date():
+                    breakdown["is_active"] = True
 
         for offset in range(7):
             current_day_local = start_of_week_local + timedelta(days=offset)
@@ -149,6 +206,13 @@ class OverviewService:
                 "seconds": 0 if is_future else seconds,
                 "goal_met": goal_met,
                 "is_future": is_future,
+                # The day's makeup, biggest category first.
+                "categories": [] if is_future else sorted(
+                    categories_by_date.get(current_date, {}).values(),
+                    key=lambda item: (-item["seconds"], item["label"], item["tags"]),
+                ),
+                "pullups": 0 if is_future else pullups_by_date.get(current_date, 0),
+                "distractions": 0 if is_future else distractions_by_date.get(current_date, 0),
             })
 
         days_elapsed = weekday_index + 1
@@ -181,9 +245,14 @@ class OverviewService:
                     {
                         "id": str(active_session["_id"]),
                         "start_time": active_session["start_time"],
+                        "category": category_summary_serial(active_category),
+                        "tags": active_session.get("tags", ""),
+                        "distractions": active_session.get("distractions", 0),
                     }
                     if active_session else None
                 ),
+                "pullups": pullups_by_date.get(now_local.date(), 0),
+                "distractions": distractions_by_date.get(now_local.date(), 0),
             },
             "week": {
                 "total_time_seconds": week_total_seconds,
@@ -192,6 +261,9 @@ class OverviewService:
                 "daily_average_seconds": int(week_total_seconds / days_elapsed) if days_elapsed else 0,
                 "goal_completed_days": goal_completed_days,
                 "graph": week_graph,
+                # Totals of the days shown, so they always match the graph.
+                "pullups": sum(day["pullups"] for day in week_graph),
+                "distractions": sum(day["distractions"] for day in week_graph),
             },
         }
 

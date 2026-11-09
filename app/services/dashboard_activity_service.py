@@ -3,7 +3,8 @@ from zoneinfo import ZoneInfo
 
 from bson import ObjectId
 
-from app.core.database import sessions_collection, categories_collection
+from app.core.database import categories_collection, pullups_collection, sessions_collection
+from app.services.pullup_service import split_into_sets
 from app.services.session_service import CATEGORY_ALIASES
 
 
@@ -46,6 +47,15 @@ class DashboardActivityService:
             return "toycon"
 
         return None
+
+    def _pullup_summary(self, times: list) -> dict:
+        sets = split_into_sets(times)
+        return {
+            "pullups": len(times),
+            "pullup_sets": len(sets),
+            # The day's biggest set, in reps.
+            "pullup_best_set": max(sets, default=0),
+        }
 
     def _split_session_by_local_day(self, session: dict, now: datetime) -> list[dict]:
         start_utc = session["start_time"]
@@ -102,6 +112,16 @@ class DashboardActivityService:
         categories = await categories_collection.find({"_id": {"$in": category_ids}}).to_list(length=None)
         category_map = {str(category["_id"]): category for category in categories}
 
+        # Each day's pull-up times, to count reps and the sets they form.
+        pullups = await pullups_collection.find(
+            {"user_id": ObjectId(user_id), "created_at": {"$gte": start_utc, "$lt": end_exclusive_utc}},
+            {"created_at": 1},
+        ).sort("created_at", 1).to_list(length=None)
+        pullup_times_by_date = {}
+        for pullup in pullups:
+            day = pullup["created_at"].astimezone(DASHBOARD_TIMEZONE).date().isoformat()
+            pullup_times_by_date.setdefault(day, []).append(pullup["created_at"])
+
         activity_by_date = {
             (start_day_local + timedelta(days=offset)).date(): {
                 "time_worked": 0,
@@ -132,6 +152,7 @@ class DashboardActivityService:
                         "is_active": False,
                         "label": category.get("label") or f"Missing category ({category_id})",
                         "color": category.get("color"),
+                        "tag_colors": category.get("tag_colors") or {},
                         "seconds": 0,
                     })
                     breakdown["seconds"] += segment["seconds"]
@@ -151,6 +172,7 @@ class DashboardActivityService:
                 "date": current_date.isoformat(),
                 "time_worked": activity["time_worked"],
                 "session_count": len(activity["session_ids"]),
+                **self._pullup_summary(pullup_times_by_date.get(current_date.isoformat(), [])),
                 "categories": sorted(activity["categories"].values(), key=lambda category: category["label"]),
                 **{
                     section_key: activity[section_key]

@@ -1,12 +1,18 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.models.dashboard_activity_response import DashboardActivityCategoryResponse
+from app.models.session_response import CategorySummary
 
 
 class OverviewActiveSessionResponse(BaseModel):
     id: str
     start_time: datetime
+    category: Optional[CategorySummary] = None
+    tags: str = ""
+    distractions: int = 0
 
 
 class OverviewDayResponse(BaseModel):
@@ -17,6 +23,9 @@ class OverviewDayResponse(BaseModel):
     goal_seconds: int
     worked_seconds: int
     active_session: Optional[OverviewActiveSessionResponse] = None
+    pullups: int = 0
+    # Distractions in sessions started today.
+    distractions: int = 0
 
 
 class OverviewWeekGraphDayResponse(BaseModel):
@@ -24,6 +33,9 @@ class OverviewWeekGraphDayResponse(BaseModel):
     seconds: int
     goal_met: bool
     is_future: bool
+    categories: list[DashboardActivityCategoryResponse] = Field(default_factory=list)
+    pullups: int = 0
+    distractions: int = 0
 
 
 class OverviewWeekResponse(BaseModel):
@@ -33,6 +45,8 @@ class OverviewWeekResponse(BaseModel):
     daily_average_seconds: int
     goal_completed_days: int
     graph: list[OverviewWeekGraphDayResponse]
+    pullups: int = 0
+    distractions: int = 0
 
 
 class OverviewResponse(BaseModel):
